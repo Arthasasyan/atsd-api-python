@@ -36,15 +36,18 @@ connection = connect('/path/to/connection.properties')
 entity_service = EntitiesService(connection)
 
 if entity_service.get(source_entity) is None:
-    raise NameError("'" + source_entity + "' entity does not exist")
+    print("'" + source_entity + "' entity does not exist")
+    exit(1)
 
 if entity_service.get(dst_entity) is None:
-    raise NameError("'" + dst_entity + "' entity does not exist")
+    print("'" + dst_entity + "' entity does not exist")
+    exit(1)
 
 metric_service = MetricsService(connection)
 
 if metric_service.get(metric) is None:
-    raise NameError("'" + metric + "' metric does not exist")
+    print("'" + metric + "' metric does not exist")
+    exit(1)
 
 series_service = SeriesService(connection)
 

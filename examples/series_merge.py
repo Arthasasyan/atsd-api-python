@@ -1,3 +1,4 @@
+import logging
 import argparse
 from atsd_client import connect
 from atsd_client.services import SeriesService, EntitiesService, MetricsService
@@ -16,22 +17,29 @@ def get_series_with_tags(series_list, tags):
 
 
 #Parse CLI args
-parser = argparse.ArgumentParser()
-parser.add_argument('--src_entity', nargs=1, required=True, help='Source entity')
-parser.add_argument('--dst_entity', nargs=1, required=True, help='Destination entity')
-parser.add_argument('--metric_name', nargs=1, required=True, help='Metric to be cloned')
-parser.add_argument('--tag_expression', nargs=1, required=False, help='Tag expression to be acquired for source series')
+parser = argparse.ArgumentParser(description="Copy metric values for series with source entity to one with"
+                                             "destination entity")
+parser.add_argument('--tag_expression', '-te', required=False, help='Tag expression to match source series')
+parser.add_argument('--dry_run', '-dr', required=False, help='Run script without sending series to ATSD',
+                    action='store_const', const=True)
+requiredArguments = parser.add_argument_group('required arguments')
+requiredArguments.add_argument('--src_entity', '-se', required=True, help='Source entity')
+requiredArguments.add_argument('--dst_entity', '-de', required=True, help='Destination entity')
+requiredArguments.add_argument('--metric_name', '-mn', required=True, help='Metric to be cloned')
 args = parser.parse_args()
-source_entity = args.src_entity[0]
-dst_entity = args.dst_entity[0]
-metric = args.metric_name[0]
+source_entity = args.src_entity
+dst_entity = args.dst_entity
+metric = args.metric_name
 tag_expression = None
 if args.tag_expression is not None:
-    tag_expression = args.tag_expression[0]
+    tag_expression = args.tag_expression
 start_date = '1970-01-01T00:00:00Z'
+dry_run = False
+if args.dry_run is not None:
+    dry_run = True
 
 
-connection = connect('/path/to/connection.properties')
+connection = connect('./connection.properties')
 
 entity_service = EntitiesService(connection)
 
@@ -76,14 +84,21 @@ for series in dst_series:
     source_series = series_service.query(source_query)
 
     if no_data(source_series):
-        print(err(series.tags, first_dst_time))
+        logging.info(err(series.tags, first_dst_time))
         continue
 
     target_series = get_series_with_tags(source_series, series.tags)
 
     if target_series is None:
-        print(err(series.tags, first_dst_time))
+        logging.info(err(series.tags, first_dst_time))
         continue
 
     target_series.entity = dst_entity
-    series_service.insert(target_series)
+    if not dry_run:
+        series_service.insert(target_series)
+
+    logging.info("Sent series with '%s' entity, '%s' metric, '%s' tags" % (target_series.entity,
+                                                                          target_series.metric, target_series.tags))
+    for sample in target_series.data:
+        logging.info("Sample: %s : %d " % (sample.get_date(), sample.v))
+
